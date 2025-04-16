@@ -2,85 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
+:root {
+  --primary-color: #0ea5e9;
+  --secondary-color: #8b5cf6;
+  --accent-color: #f59e0b;
+  --background-color: #f8fafc;
+  --text-color: #1e293b;
+}
+
+body {
+  @apply bg-background-color text-text-color font-sans antialiased;
+  margin: 0;
+  padding: 0;
+}
+
+/* Glass morphism effect */
+.glass {
+  @apply bg-white bg-opacity-20 backdrop-blur-lg rounded-xl border border-white border-opacity-20 shadow-lg;
+}
+
+/* Gradient backgrounds */
+.bg-gradient-blue-purple {
+  @apply bg-gradient-to-r from-primary-500 to-secondary-500;
+}
+
+.bg-gradient-animated {
+  @apply bg-gradient-to-r from-primary-500 via-secondary-500 to-primary-500 animate-gradient-x bg-size-200;
+}
+
+.bg-gradient-radial {
+  @apply bg-gradient-radial from-primary-500 via-secondary-400 to-background-color;
+}
+
+.bg-gradient-conic {
+  @apply bg-gradient-conic from-primary-500 via-secondary-500 to-accent-color;
+}
+
+/* Custom utilities */
+.bg-size-200 {
+  background-size: 200% 200%;
+}
+
+/* Card styles */
+.card {
+  @apply glass p-6 transition-all duration-300 hover:shadow-xl;
+}
+
+.card-hover {
+  @apply hover:scale-105 hover:shadow-lg transition-all duration-300;
+}
+
+/* Button styles */
+.btn {
+  @apply px-4 py-2 rounded-lg font-medium transition-all duration-300;
+}
+
+.btn-primary {
+  @apply bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700;
+}
+
+.btn-secondary {
+  @apply bg-secondary-500 text-white hover:bg-secondary-600 active:bg-secondary-700;
+}
+
+.btn-gradient {
+  @apply bg-gradient-blue-purple text-white hover:shadow-lg active:opacity-90;
+}
+
+/* Input styles */
+.input {
+  @apply px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+}
+
+/* Animation utilities */
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive container */
+.container-responsive {
+  @apply container mx-auto px-4 sm:px-6 lg:px-8;
+}
+
+/* Navbar styles */
+.navbar {
+  @apply glass sticky top-0 z-50 px-6 py-4 flex items-center justify-between;
+}
+
+/* Product card */
+.product-card {
+  @apply card card-hover;
+}
+
+/* Chat bubble */
+.chat-bubble {
+  @apply rounded-2xl p-4 max-w-[80%];
+}
+
+.chat-bubble-user {
+  @apply bg-primary-500 text-white ml-auto;
+}
+
+.chat-bubble-bot {
+  @apply glass mr-auto;
+}
+
+/* Skeleton loading */
+.skeleton {
+  @apply animate-pulse bg-gray-200 rounded;
+}
+
+/* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  @apply bg-gray-100 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
-}
-
-/* Utility classes */
-.line-clamp-1 {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;  
-  overflow: hidden;
-}
-
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;  
-  overflow: hidden;
-}
-
-/* Chat animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.chat-message-animation {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-/* Product card hover effect */
-.product-card {
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-
-.product-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* Button pulse effect */
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-}
-
-.pulse-animation {
-  animation: pulse 2s infinite;
-}
-
-/* Responsive adjustments */
-@media (max-width: 640px) {
-  .chat-container {
-    width: 100%;
-    right: 0;
-    bottom: 0;
-    border-radius: 0;
-  }
+  @apply bg-gray-300 rounded-full hover:bg-gray-400;
 }

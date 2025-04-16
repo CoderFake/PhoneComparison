@@ -1,4 +1,4 @@
-import api from './api';
+import api from './api.jsx';
 
 // Service xử lý tương tác với API chat
 export const chatService = {

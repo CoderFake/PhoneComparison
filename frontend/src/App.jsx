@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Routes, Route, Link } from 'react-router-dom';
 import { useInView } from 'react-intersection-observer';
-import ProductList from './components/ProductList';
-import ProductDetail from './components/ProductDetail';
-import ProductComparison from './components/ProductComparison';
-import ChatBot from './components/ChatBot';
+import ProductList from './components/ProductList.jsx';
+import ProductDetail from './components/ProductDetail.jsx';
+import ProductComparison from './components/ProductComparison.jsx';
+import ChatBot from './components/ChatBot.jsx';
 
 const App = () => {
   const [darkMode, setDarkMode] = useState(false);
