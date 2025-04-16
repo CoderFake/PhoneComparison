@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     RAG_SIMILARITY_THRESHOLD: float = float(os.getenv("RAG_SIMILARITY_THRESHOLD", "0.6"))
     
     # LLM Settings
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-pro")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "1024"))
     

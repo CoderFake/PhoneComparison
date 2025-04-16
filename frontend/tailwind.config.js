@@ -31,6 +31,7 @@ module.exports = {
           800: '#5b21b6',
           900: '#4c1d95',
         },
+        accent: '#f59e0b' 
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -76,4 +77,5 @@ module.exports = {
     },
   },
   plugins: [],
+  darkMode: 'class'
 }

@@ -1,4 +1,3 @@
-// Đảm bảo file index.jsx có cấu trúc tương tự như sau
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
