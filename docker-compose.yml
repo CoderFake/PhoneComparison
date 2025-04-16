@@ -11,23 +11,22 @@ services:
     environment:
       - SEARXNG_API_URL=http://searxng:8080
       - CRAWL4AI_API_URL=http://crawl4ai:8888
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - VECTOR_DB_URL=http://vectordb:6333
     depends_on:
       - searxng
       - crawl4ai
       - vectordb
 
-  # Frontend Service
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - backend
+  # # Frontend Service
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - backend
 
   # SearXNG Service
   searxng:
@@ -54,7 +53,7 @@ services:
 
   # Crawl4AI Service
   crawl4ai:
-    build: ./crawl4ai
+    image: unclecode/crawl4ai:latest
     ports:
       - "8888:8888"
     volumes:
@@ -62,8 +61,9 @@ services:
       - ./crawl4ai/data:/app/data
     environment:
       - CRAWL4AI_LOG_LEVEL=INFO
+    restart: unless-stopped
 
-  # Vector Database (Qdrant for storing embeddings)
+  # Vector Database
   vectordb:
     image: qdrant/qdrant:v1.7.0
     ports:
@@ -74,12 +74,8 @@ services:
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__STORAGE__OPTIMIZERS__DEFAULT_SEGMENT_NUMBER=2
-      - QDRANT__STORAGE__OPTIMIZERS__INDEXING_THRESHOLD=20000
-      - QDRANT__STORAGE__OPTIMIZERS__MEMMAP_THRESHOLD=50000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s

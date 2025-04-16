@@ -16,7 +16,6 @@ class ChatService:
     """
     
     def __init__(self):
-        # Cấu hình Gemini
         try:
             genai.configure(api_key=settings.GEMINI_API_KEY)
             self.model = genai.GenerativeModel(
@@ -47,7 +46,6 @@ class ChatService:
         logger.info("Generating response for message type: {}", message_type)
         
         try:
-            # Chuẩn bị prompt dựa trên loại tin nhắn
             if message_type == MessageType.PRODUCT_LIST:
                 prompt = self._create_product_list_prompt(user_message, chat_history, data)
             elif message_type == MessageType.PRODUCT_DETAIL:
@@ -57,10 +55,8 @@ class ChatService:
             else:
                 prompt = self._create_default_prompt(user_message, chat_history)
             
-            # Gọi Gemini API
             response = await self.model.generate_content_async(prompt)
             
-            # Lấy text từ response
             response_text = ""
             for part in response.parts:
                 if hasattr(part, 'text'):
@@ -157,7 +153,6 @@ class ChatService:
         """
         products = data.get("products", [])
         
-        # Tạo thông tin so sánh
         comparison = []
         for product in products:
             comparison.append(f"""
@@ -242,7 +237,7 @@ class ChatService:
             
         formatted = []
         for i, product in enumerate(products, start=1):
-            if i > 10:  # Giới hạn số lượng sản phẩm để tránh prompt quá dài
+            if i > 10:
                 formatted.append(f"... và {len(products) - 10} sản phẩm khác")
                 break
                 
@@ -272,7 +267,6 @@ class ChatService:
         """
         Format giá tiền.
         """
-        # Chia số thành nhóm 3 chữ số từ phải sang trái
         price_str = str(int(price))
         parts = []
         
@@ -280,5 +274,4 @@ class ChatService:
             parts.append(price_str[-3:])
             price_str = price_str[:-3]
             
-        # Đảo ngược lại và ghép với dấu chấm
         return ".".join(reversed(parts))

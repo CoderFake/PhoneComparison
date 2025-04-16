@@ -1,43 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
-const ProductList = ({ products }) => {
+const ProductList = ({ products = [] }) => {
   const [sortBy, setSortBy] = useState('relevance');
   const [priceRange, setPriceRange] = useState([0, 50000000]);
   const [brands, setBrands] = useState([]);
+  const [error, setError] = useState(null);
 
-  // Danh sách các thương hiệu từ sản phẩm
-  const availableBrands = [...new Set(products.map(product => product.brand))];
+  const safeProducts = Array.isArray(products) ? products : [];
 
-  // Lọc và sắp xếp sản phẩm
-  const filteredProducts = products
+  const availableBrands = [...new Set(safeProducts.map(product => product.brand || 'Unknown'))];
+
+  const filteredProducts = safeProducts
     .filter(product => {
-      // Lọc theo khoảng giá
-      const minPrice = product.min_price || 0;
+      const minPrice = typeof product.min_price === 'number' ? product.min_price : 
+                     parseFloat(product.min_price || 0);
+      
       if (minPrice < priceRange[0] || minPrice > priceRange[1]) {
         return false;
       }
       
-      // Lọc theo thương hiệu
-      if (brands.length > 0 && !brands.includes(product.brand)) {
+      if (brands.length > 0 && (!product.brand || !brands.includes(product.brand))) {
         return false;
       }
       
       return true;
     })
     .sort((a, b) => {
-      // Sắp xếp theo các tiêu chí
+      const aPrice = typeof a.min_price === 'number' ? a.min_price : parseFloat(a.min_price || 0);
+      const bPrice = typeof b.min_price === 'number' ? b.min_price : parseFloat(b.min_price || 0);
+      
       switch (sortBy) {
         case 'price_asc':
-          return (a.min_price || 0) - (b.min_price || 0);
+          return aPrice - bPrice;
         case 'price_desc':
-          return (b.min_price || 0) - (a.min_price || 0);
+          return bPrice - aPrice;
         default:
-          return 0; // Mặc định theo độ liên quan
+          return 0; 
       }
     });
 
-  // Xử lý thay đổi bộ lọc thương hiệu
   const handleBrandChange = (brand) => {
     if (brands.includes(brand)) {
       setBrands(brands.filter(b => b !== brand));
@@ -46,9 +48,19 @@ const ProductList = ({ products }) => {
     }
   };
 
-  // Format giá tiền
   const formatPrice = (price) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+    const numPrice = typeof price === 'number' ? price : parseFloat(price || 0);
+    
+    if (isNaN(numPrice)) {
+      return 'Không có giá';
+    }
+    
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(numPrice);
+  };
+
+  const handleImageError = (e) => {
+    e.target.onerror = null; 
+    e.target.src = 'https://via.placeholder.com/150?text=Không+có+hình';
   };
 
   return (
@@ -86,7 +98,7 @@ const ProductList = ({ products }) => {
                   <input
                     type="number"
                     value={priceRange[0]}
-                    onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
+                    onChange={(e) => setPriceRange([parseInt(e.target.value) || 0, priceRange[1]])}
                     className="w-full p-2 border rounded"
                   />
                 </div>
@@ -95,7 +107,7 @@ const ProductList = ({ products }) => {
                   <input
                     type="number"
                     value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
+                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value) || 0])}
                     className="w-full p-2 border rounded"
                   />
                 </div>
@@ -130,19 +142,20 @@ const ProductList = ({ products }) => {
                 className="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
               >
                 <div className="h-48 bg-gray-200 flex items-center justify-center p-4">
-                  {product.image_url && product.image_url.length > 0 ? (
+                  {product.image_url && Array.isArray(product.image_url) && product.image_url.length > 0 ? (
                     <img
                       src={product.image_url[0]}
-                      alt={product.name}
+                      alt={product.name || 'Sản phẩm'}
                       className="max-h-full max-w-full object-contain"
+                      onError={handleImageError}
                     />
                   ) : (
                     <div className="text-gray-400">Không có hình ảnh</div>
                   )}
                 </div>
                 <div className="p-4">
-                  <h3 className="text-lg font-medium mb-2 line-clamp-2">{product.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{product.brand}</p>
+                  <h3 className="text-lg font-medium mb-2 line-clamp-2">{product.name || 'Không có tên sản phẩm'}</h3>
+                  <p className="text-sm text-gray-600 mb-2">{product.brand || 'Không rõ thương hiệu'}</p>
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-bold text-lg text-blue-600">

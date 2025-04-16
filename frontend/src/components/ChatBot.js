@@ -7,37 +7,69 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Khởi tạo phiên chat khi component mount
   useEffect(() => {
-    const newSessionId = sessionId || `session-${Date.now()}`;
-    setSessionId(newSessionId);
-    
-    // Thêm tin nhắn chào mừng
-    if (messages.length === 0) {
-      setMessages([
-        {
-          role: 'assistant',
-          content: 'Xin chào! Tôi là trợ lý ảo của hệ thống so sánh giá điện thoại. Bạn có thể hỏi tôi về bất kỳ sản phẩm nào hoặc yêu cầu tìm kiếm theo tiêu chí như giá, thương hiệu...',
-          type: 'text'
-        }
-      ]);
+    try {
+      const savedSessionId = localStorage.getItem('chatSessionId');
+      const newSessionId = savedSessionId || `session-${Date.now()}`;
+      setSessionId(newSessionId);
+      
+      if (!savedSessionId) {
+        localStorage.setItem('chatSessionId', newSessionId);
+      }
+      
+      if (messages.length === 0) {
+        setMessages([
+          {
+            role: 'assistant',
+            content: 'Xin chào! Tôi là trợ lý ảo của hệ thống so sánh giá điện thoại. Bạn có thể hỏi tôi về bất kỳ sản phẩm nào hoặc yêu cầu tìm kiếm theo tiêu chí như giá, thương hiệu...',
+            type: 'text'
+          }
+        ]);
+      }
+      
+      if (savedSessionId) {
+        loadChatHistory(savedSessionId);
+      }
+    } catch (error) {
+      console.error("Error initializing chat session:", error);
+      setError("Không thể khởi tạo phiên chat. Vui lòng tải lại trang.");
     }
   }, []);
 
-  // Cuộn xuống tin nhắn cuối cùng
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
-  // Xử lý gửi tin nhắn
+  const loadChatHistory = async (sid) => {
+    try {
+      setIsLoading(true);
+      const history = await chatService.getChatHistory(sid);
+      
+      if (history && history.messages && Array.isArray(history.messages)) {
+        setMessages(history.messages);
+      }
+    } catch (error) {
+      console.error("Error loading chat history:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
     
-    // Thêm tin nhắn của người dùng vào danh sách
+    if (input.length > 500) {
+      setError("Tin nhắn quá dài. Vui lòng giới hạn dưới 500 ký tự.");
+      return;
+    }
+    
+    setError(null);
+    
     const userMessage = {
       role: 'user',
       content: input,
@@ -49,47 +81,67 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
     setIsLoading(true);
     
     try {
-      // Gọi API chat
       const response = await chatService.sendMessage(sessionId, input);
       
-      // Thêm tin nhắn phản hồi vào danh sách
+      if (response.error) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: response.response.content,
+          type: 'text'
+        }]);
+        setError("Có lỗi xảy ra khi xử lý yêu cầu.");
+        return;
+      }
+      
+      if (!response.response || !response.response.content) {
+        throw new Error("Invalid response format");
+      }
+      
       const assistantMessage = {
         role: 'assistant',
         content: response.response.content,
-        type: response.response.type
+        type: response.response.type || 'text'
       };
       
       setMessages(prev => [...prev, assistantMessage]);
       
-      // Gửi dữ liệu cho component cha
+      const messageData = {
+        messageType: response.response.type,
+      };
+      
       if (response.data) {
-        onDataReceived({
-          messageType: response.response.type,
-          ...response.data
-        });
+        if (response.response.type === 'product_list' && response.data.products) {
+          messageData.products = response.data.products;
+        } else if (response.response.type === 'product_detail' && response.data.product) {
+          messageData.product = response.data.product;
+        } else if (response.response.type === 'product_comparison' && response.data.products) {
+          messageData.products = response.data.products;
+        }
+        
+        onDataReceived(messageData);
       }
     } catch (error) {
       console.error('Lỗi khi gửi tin nhắn:', error);
       
-      // Thêm tin nhắn lỗi
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: 'Xin lỗi, có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau.',
         type: 'text'
       }]);
+      
+      setError("Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng và thử lại.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Xử lý sự kiện nhấn Enter
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
 
-  // Tạo component tin nhắn
   const MessageBubble = ({ message }) => {
     const isUser = message.role === 'user';
     
@@ -98,7 +150,7 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
         <div className={`rounded-lg py-2 px-3 max-w-[80%] ${
           isUser ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'
         }`}>
-          <p className="text-sm">{message.content}</p>
+          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           
           {message.type !== 'text' && (
             <div className="mt-1 text-xs italic">
@@ -112,12 +164,43 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
     );
   };
 
+  const handleClearChat = async () => {
+    try {
+      setIsLoading(true);
+      
+      if (sessionId) {
+        await chatService.deleteSession(sessionId);
+      }
+      
+      const newSessionId = `session-${Date.now()}`;
+      setSessionId(newSessionId);
+      localStorage.setItem('chatSessionId', newSessionId);
+      
+      setMessages([
+        {
+          role: 'assistant',
+          content: 'Lịch sử chat đã được xóa. Bạn có thể bắt đầu cuộc trò chuyện mới.',
+          type: 'text'
+        }
+      ]);
+      
+      onDataReceived(null);
+      
+    } catch (error) {
+      console.error("Error clearing chat history:", error);
+      setError("Không thể xóa lịch sử chat. Vui lòng thử lại sau.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {/* Nút đóng/mở chatbot */}
       <button
         onClick={onToggle}
         className="absolute bottom-0 right-0 w-12 h-12 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors"
+        aria-label={isOpen ? "Đóng chat" : "Mở chat"}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -148,7 +231,7 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            className="absolute bottom-16 right-0 w-96 h-96 bg-white rounded-lg shadow-xl overflow-hidden flex flex-col"
+            className="absolute bottom-16 right-0 w-96 h-[480px] bg-white rounded-lg shadow-xl overflow-hidden flex flex-col"
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -157,7 +240,21 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
             {/* Header */}
             <div className="bg-blue-600 text-white py-3 px-4 flex items-center justify-between">
               <h3 className="font-medium">Trợ lý tìm kiếm sản phẩm</h3>
+              <button 
+                onClick={handleClearChat}
+                className="text-xs bg-blue-700 hover:bg-blue-800 px-2 py-1 rounded text-white"
+                disabled={isLoading}
+              >
+                Xóa lịch sử
+              </button>
             </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-2 text-xs">
+                <p>{error}</p>
+              </div>
+            )}
 
             {/* Messages */}
             <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
@@ -190,6 +287,8 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
                 placeholder="Nhập tin nhắn..."
                 className="flex-1 border border-gray-300 rounded-l-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isLoading}
+                maxLength={500}
+                aria-label="Nhập tin nhắn"
               />
               <button
                 onClick={handleSendMessage}
@@ -199,6 +298,7 @@ const ChatBot = ({ isOpen, onToggle, onDataReceived }) => {
                     ? 'bg-gray-300 text-gray-500'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
+                aria-label="Gửi tin nhắn"
               >
                 Gửi
               </button>

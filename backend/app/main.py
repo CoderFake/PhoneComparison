@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.controllers import product_controller, chat_controller
 from app.config import settings
 
-# Khởi tạo ứng dụng FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -19,7 +18,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Đăng ký các routes từ controllers
 app.include_router(product_controller.router, prefix="/api/products", tags=["products"])
 app.include_router(chat_controller.router, prefix="/api/chat", tags=["chat"])
 

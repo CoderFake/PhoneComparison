@@ -31,11 +31,9 @@ async def list_products(
         limit=limit
     )
     
-    # Sử dụng reflection để xác định nên lấy dữ liệu từ đâu
     reflection_result = await reflection_service.reflect_on_product_list(request)
     
     if reflection_result.action == "rag_query":
-        # Lấy dữ liệu từ RAG
         products = await rag_service.get_products(
             query=request.query,
             price_min=request.price_min,
@@ -46,10 +44,8 @@ async def list_products(
             limit=request.limit
         )
     elif reflection_result.action == "crawl":
-        # Khởi tạo quá trình crawl để lấy dữ liệu mới
         products = await reflection_service.crawl_new_products(request)
     else:
-        # Nếu không có action phù hợp
         raise HTTPException(status_code=404, detail="Không tìm thấy sản phẩm phù hợp")
     
     return products
@@ -59,17 +55,13 @@ async def get_product_detail(product_id: str):
     """
     API lấy chi tiết sản phẩm theo ID.
     """
-    # Sử dụng reflection để xác định nên lấy dữ liệu từ đâu
     reflection_result = await reflection_service.reflect_on_product_detail(product_id)
     
     if reflection_result.action == "rag_query":
-        # Lấy chi tiết sản phẩm từ RAG
         product = await rag_service.get_product_by_id(product_id)
     elif reflection_result.action == "crawl":
-        # Crawl để lấy thông tin chi tiết sản phẩm
         product = await reflection_service.crawl_product_detail(product_id)
     else:
-        # Nếu không có action phù hợp
         raise HTTPException(status_code=404, detail=f"Không tìm thấy sản phẩm với ID: {product_id}")
     
     return product
@@ -82,14 +74,12 @@ async def compare_products(request: ProductComparisonRequest):
     if not request.product_ids or len(request.product_ids) < 2:
         raise HTTPException(status_code=400, detail="Cần ít nhất 2 sản phẩm để so sánh")
     
-    # Lấy thông tin chi tiết từng sản phẩm
     products = []
     for product_id in request.product_ids:
         try:
             product = await get_product_detail(product_id)
             products.append(product)
         except HTTPException:
-            # Bỏ qua sản phẩm không tìm thấy
             continue
     
     if len(products) < 2:

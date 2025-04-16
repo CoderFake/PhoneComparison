@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Cài đặt thư viện embedding tiếng Việt
-RUN pip install --no-cache-dir torch==2.1.2 transformers==4.37.2 vinai-phobert
+RUN pip install --no-cache-dir torch==2.1.2 transformers==4.37.2
 
 # Sao chép mã nguồn
 COPY . .

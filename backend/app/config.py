@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     
     # Caching Settings
     ENABLE_CACHE: bool = True
-    CACHE_TTL: int = 3600  # 1 hour
+    CACHE_TTL: int = 3600
     
     # Crawling Settings
     MAX_CRAWL_PAGES: int = int(os.getenv("MAX_CRAWL_PAGES", "20"))
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """
-    Trả về đối tượng settings, sử dụng caching để tối ưu hiệu suất.
+    Trả về đối tượng settings
     """
     logger.info("Loading settings...")
     return Settings()

@@ -23,9 +23,7 @@ class RAGService:
     """
     
     def __init__(self):
-        # Khởi tạo mô hình embedding
         try:
-            # Tối ưu hóa tải mô hình với caching
             self.embedding_model = SentenceTransformer(
                 settings.EMBEDDING_MODEL, 
                 device='cuda' if torch.cuda.is_available() else 'cpu'
@@ -37,7 +35,6 @@ class RAGService:
             )
         except Exception as e:
             logger.error("Error loading primary embedding model: {}", e)
-            # Fallback to huggingface/SentenceTransformers
             try:
                 word_embedding_model = models.Transformer('vinai/phobert-base', max_seq_length=256)
                 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
@@ -45,11 +42,9 @@ class RAGService:
                 logger.info("Loaded fallback embedding model")
             except Exception as e2:
                 logger.error("Failed to load fallback model too: {}", e2)
-                # Final fallback to a backup model
                 self.embedding_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
                 logger.warning("Using multilingual backup model")
         
-        # Khởi tạo kết nối với Vector DB
         try:
             self.vector_db = QdrantClient(
                 url=settings.VECTOR_DB_URL,
@@ -61,10 +56,8 @@ class RAGService:
             logger.error("Failed to connect to vector database: {}", e)
             raise
         
-        # Tạo collection nếu chưa tồn tại
         self._create_collection_if_not_exists()
         
-        # Khởi tạo HTML splitter
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200
@@ -90,7 +83,6 @@ class RAGService:
                 )
                 logger.info("Collection '{}' created successfully", settings.COLLECTION_NAME)
                 
-                # Tạo index cho field product_data.id để search nhanh
                 self.vector_db.create_payload_index(
                     collection_name=settings.COLLECTION_NAME,
                     field_name="product_data.id",
@@ -115,16 +107,13 @@ class RAGService:
         logger.info("Adding {} documents to RAG", len(documents))
         
         try:
-            # Tạo embeddings cho từng document
             texts = [doc.page_content for doc in documents]
             embeddings = self.embedding_model.encode(texts)
             
-            # Chuẩn bị dữ liệu lưu vào vector database
             points = []
             for i, (doc, embedding) in enumerate(zip(documents, embeddings)):
                 record_id = str(uuid.uuid4())
                 
-                # Đảm bảo metadata là dictionary hợp lệ
                 metadata = dict(doc.metadata) if doc.metadata else {}
                 
                 points.append(
@@ -142,7 +131,6 @@ class RAGService:
                     )
                 )
             
-            # Lưu vào vector database
             self.vector_db.upsert(
                 collection_name=settings.COLLECTION_NAME,
                 points=points
@@ -171,18 +159,14 @@ class RAGService:
         try:
             from langchain_community.document_loaders import BSHTMLLoader
             
-            # Sử dụng BSHTMLLoader để xử lý HTML
             loader = BSHTMLLoader(html_content=html_content)
             documents = loader.load()
             
-            # Thêm metadata vào mỗi document
             for doc in documents:
                 doc.metadata.update(metadata)
             
-            # Chia documents thành các đoạn nhỏ hơn
             chunks = self.text_splitter.split_documents(documents)
             
-            # Thêm chunks vào RAG
             result = await self.add_documents_to_rag(chunks)
             
             return result
@@ -200,20 +184,17 @@ class RAGService:
         sort_by: str = "relevance",
         page: int = 1,
         limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Product]:
         """
         Tìm kiếm sản phẩm từ vector database dựa vào query và filters.
         """
         logger.info("Searching products with query: {}", query)
         
         try:
-            # Tạo embedding cho query
             query_embedding = self.embedding_model.encode(query).tolist()
             
-            # Xây dựng filter
             filter_conditions = []
             
-            # Lọc theo giá
             if price_min is not None:
                 filter_conditions.append(
                     qdrant_models.FieldCondition(
@@ -234,7 +215,6 @@ class RAGService:
                     )
                 )
                 
-            # Lọc theo thương hiệu
             if brands and len(brands) > 0:
                 filter_conditions.append(
                     qdrant_models.FieldCondition(
@@ -245,14 +225,12 @@ class RAGService:
                     )
                 )
             
-            # Tổng hợp filter conditions
             query_filter = None
             if len(filter_conditions) > 0:
                 query_filter = qdrant_models.Filter(
                     must=filter_conditions
                 )
             
-            # Tìm kiếm trong vector database
             search_result = self.vector_db.search(
                 collection_name=settings.COLLECTION_NAME,
                 query_vector=query_embedding,
@@ -261,7 +239,6 @@ class RAGService:
                 score_threshold=settings.RAG_SIMILARITY_THRESHOLD
             )
             
-            # Trích xuất thông tin sản phẩm từ kết quả tìm kiếm
             products_dict = {}
             for point in search_result:
                 product_data = point.payload.get("product_data")
@@ -272,43 +249,60 @@ class RAGService:
                 if not product_id:
                     continue
                     
-                # Chỉ lưu sản phẩm có độ tương đồng cao nhất
                 if product_id not in products_dict:
                     products_dict[product_id] = product_data
                     
-            # Chuyển sang danh sách
             product_list = list(products_dict.values())
             
-            # Sắp xếp kết quả
             sorted_products = self._sort_products(product_list, sort_by)
             
-            # Phân trang
             start_idx = (page - 1) * limit
             end_idx = start_idx + limit
             
             logger.info("Found {} products for query: {}", len(sorted_products), query)
             
-            return sorted_products[start_idx:end_idx]
+            validated_products = []
+            for product_dict in sorted_products[start_idx:end_idx]:
+                try:
+                    product_dict = self._preprocess_product_data(product_dict)
+                    
+                    product = Product(**product_dict)
+                    validated_products.append(product)
+                except Exception as e:
+                    logger.error("Error validating product data: {}", e)
+                    try:
+                        minimal_data = {
+                            "id": product_dict.get("id") or str(uuid.uuid4()),
+                            "name": product_dict.get("name", "Unknown Product"),
+                            "brand": product_dict.get("brand", "Unknown"),
+                            "model": product_dict.get("model", ""),
+                            "min_price": float(product_dict.get("min_price", 0)),
+                            "max_price": float(product_dict.get("max_price", 0)),
+                            "average_price": float(product_dict.get("average_price", 0)),
+                            "sources": []
+                        }
+                        validated_products.append(Product(**minimal_data))
+                    except Exception:
+                        pass
+                        
+            return validated_products
         except Exception as e:
             logger.error("Error searching products from RAG: {}", e)
-            # Trả về danh sách rỗng nếu có lỗi
             return []
-    
+        
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    async def get_product_by_id(self, product_id: str) -> Optional[Dict[str, Any]]:
+    async def get_product_by_id(self, product_id: str) -> Optional[Product]:
         """
         Lấy thông tin chi tiết sản phẩm theo ID từ RAG.
         """
         logger.info("Retrieving product detail for ID: {}", product_id)
         
         try:
-            # Tìm kiếm theo ID
             filter_condition = qdrant_models.FieldCondition(
                 key="product_data.id",
                 match=qdrant_models.MatchValue(value=product_id)
             )
             
-            # Sử dụng vector rỗng để tìm kiếm chỉ dựa vào filter
             dummy_vector = [0.0] * settings.EMBEDDING_DIMENSION
             
             search_result = self.vector_db.search(
@@ -324,18 +318,74 @@ class RAGService:
                 logger.warning("Product with ID {} not found", product_id)
                 return None
                 
-            # Lấy dữ liệu sản phẩm
             product_data = search_result[0].payload.get("product_data", {})
             if not product_data:
                 logger.warning("No product data found for ID: {}", product_id)
                 return None
+            
+            try:
+                product_data = self._preprocess_product_data(product_data)
                 
-            logger.info("Successfully retrieved product with ID: {}", product_id)
-            return product_data
+                product = Product(**product_data)
+                logger.info("Successfully retrieved product with ID: {}", product_id)
+                return product
+            except Exception as e:
+                logger.error("Error validating product data: {}", e)
+                return None
+                
         except Exception as e:
             logger.error("Error retrieving product by ID from RAG: {}", e)
-            # Trả về None nếu có lỗi
             return None
+        
+    def _preprocess_product_data(self, product_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Tiền xử lý dữ liệu sản phẩm để phù hợp với Pydantic model.
+        """
+        processed = product_dict.copy()
+        
+        if "image_url" in processed and processed["image_url"] is not None:
+            if not isinstance(processed["image_url"], list):
+                processed["image_url"] = [processed["image_url"]]
+        else:
+            processed["image_url"] = []
+        
+        if "sources" in processed and processed["sources"]:
+            processed_sources = []
+            for source in processed["sources"]:
+                source_copy = source.copy()
+                
+                if "last_updated" in source_copy and isinstance(source_copy["last_updated"], str):
+                    try:
+                        source_copy["last_updated"] = datetime.fromisoformat(source_copy["last_updated"])
+                    except ValueError:
+                        source_copy["last_updated"] = datetime.now()
+                
+                if "price" in source_copy:
+                    source_copy["price"] = float(source_copy["price"])
+                
+                processed_sources.append(source_copy)
+            processed["sources"] = processed_sources
+        
+        if "specifications" in processed and processed["specifications"]:
+            if not isinstance(processed["specifications"], dict):
+                processed["specifications"] = {}
+                
+            if "color" in processed["specifications"] and processed["specifications"]["color"]:
+                if not isinstance(processed["specifications"]["color"], list):
+                    processed["specifications"]["color"] = [processed["specifications"]["color"]]
+
+            if "connectivity" in processed["specifications"] and processed["specifications"]["connectivity"]:
+                if not isinstance(processed["specifications"]["connectivity"], list):
+                    processed["specifications"]["connectivity"] = [processed["specifications"]["connectivity"]]
+        
+        for price_field in ["min_price", "max_price", "average_price"]:
+            if price_field in processed:
+                try:
+                    processed[price_field] = float(processed[price_field])
+                except (ValueError, TypeError):
+                    processed[price_field] = 0.0
+        
+        return processed
     
     def _sort_products(self, products: List[Dict[str, Any]], sort_by: str) -> List[Dict[str, Any]]:
         """
@@ -350,7 +400,6 @@ class RAGService:
         elif sort_by == "name_desc":
             return sorted(products, key=lambda p: p.get("name", ""), reverse=True)
         
-        # Mặc định không sắp xếp (relevance)
         return products
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -361,22 +410,17 @@ class RAGService:
         logger.info("Searching similar products for ID: {}", product_id)
         
         try:
-            # Lấy thông tin sản phẩm
             product = await self.get_product_by_id(product_id)
             if not product:
                 logger.warning("Product with ID {} not found for similarity search", product_id)
                 return []
                 
-            # Tạo query string từ thông tin sản phẩm
             query = f"{product.get('name', '')} {product.get('brand', '')} {product.get('model', '')}"
             
-            # Lấy các sản phẩm tương tự nhưng loại trừ sản phẩm hiện tại
             products = await self.get_products(query=query, limit=limit+1)
             
-            # Loại bỏ sản phẩm hiện tại khỏi kết quả
             similar_products = [p for p in products if p.get("id") != product_id]
             
-            # Giới hạn số lượng sản phẩm trả về
             return similar_products[:limit]
         except Exception as e:
             logger.error("Error searching similar products: {}", e)
@@ -395,7 +439,6 @@ class RAGService:
                 logger.error("No product ID provided for update")
                 return False
                 
-            # Tìm các points chứa product_data.id
             filter_condition = qdrant_models.FieldCondition(
                 key="product_data.id",
                 match=qdrant_models.MatchValue(value=product_id)
@@ -415,15 +458,12 @@ class RAGService:
                 logger.warning("No points found with product ID: {} for update", product_id)
                 return False
                 
-            # Cập nhật payload cho tất cả points
             for point in points:
                 point_id = point.id
                 payload = point.payload
                 
-                # Cập nhật product_data
                 payload["product_data"] = product_data
                 
-                # Cập nhật payload
                 self.vector_db.set_payload(
                     collection_name=settings.COLLECTION_NAME,
                     payload=payload,
@@ -442,12 +482,10 @@ class RAGService:
         Lấy tổng số sản phẩm trong RAG.
         """
         try:
-            # Lấy thông tin collection
             collection_info = self.vector_db.get_collection(
                 collection_name=settings.COLLECTION_NAME
             )
             
-            # Trả về số lượng points
             return collection_info.vectors_count
         except Exception as e:
             logger.error("Error getting product count from RAG: {}", e)

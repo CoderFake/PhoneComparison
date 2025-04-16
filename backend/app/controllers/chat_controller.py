@@ -15,7 +15,6 @@ chat_service = ChatService()
 reflection_service = ReflectionService()
 rag_service = RAGService()
 
-# In-memory storage for chat sessions
 chat_sessions: Dict[str, ChatSession] = {}
 
 @router.post("/send", response_model=ChatResponse)
@@ -30,7 +29,6 @@ async def send_message(request: ChatRequest = Body(...)):
     logger.info("Processing chat message: {}", 
              request.message[:50] + "..." if len(request.message) > 50 else request.message)
     
-    # Kiểm tra hoặc tạo phiên chat mới
     session_id = request.session_id or str(uuid.uuid4())
     if session_id not in chat_sessions:
         logger.info("Creating new chat session: {}", session_id)
@@ -38,7 +36,6 @@ async def send_message(request: ChatRequest = Body(...)):
     
     session = chat_sessions[session_id]
     
-    # Lưu tin nhắn của người dùng
     user_message = ChatMessage(
         role=MessageRole.USER,
         content=request.message,
@@ -48,7 +45,6 @@ async def send_message(request: ChatRequest = Body(...)):
     session.messages.append(user_message)
     session.updated_at = datetime.now()
     
-    # Phân tích và reflection để xác định loại hành động
     logger.info("Applying reflection to determine action")
     reflection_result = await reflection_service.reflect_on_chat_message(
         message=request.message,
@@ -61,10 +57,8 @@ async def send_message(request: ChatRequest = Body(...)):
     response_data: Dict[str, Any] = {}
     message_type = MessageType.TEXT
     
-    # Xử lý dựa trên kết quả reflection
     try:
         if reflection_result.action == "product_list":
-            # Truy vấn danh sách sản phẩm
             logger.info("Action: product_list, query: {}", reflection_result.query)
             products = await rag_service.get_products(
                 query=reflection_result.query,
@@ -74,7 +68,6 @@ async def send_message(request: ChatRequest = Body(...)):
                 limit=10
             )
             
-            # Nếu không tìm thấy trong RAG, thử crawl
             if not products:
                 logger.info("No products found in RAG, trying crawl")
                 request_params = {
@@ -95,13 +88,11 @@ async def send_message(request: ChatRequest = Body(...)):
             message_type = MessageType.PRODUCT_LIST
             
         elif reflection_result.action == "product_detail":
-            # Lấy thông tin chi tiết sản phẩm
             logger.info("Action: product_detail")
             product_id = reflection_result.additional_info.get("product_id")
             product_name = reflection_result.additional_info.get("product_name")
             
             if not product_id and product_name:
-                # Tìm kiếm sản phẩm dựa trên tên
                 logger.info("No product ID provided, searching by name: {}", product_name)
                 search_query = product_name
                 products = await rag_service.get_products(query=search_query, limit=1)
@@ -109,7 +100,6 @@ async def send_message(request: ChatRequest = Body(...)):
                     product_id = products[0].get("id")
             
             if not product_id:
-                # Tìm kiếm sản phẩm dựa trên mô tả tổng quát
                 logger.info("No product ID or name found, using general query: {}", reflection_result.query)
                 search_query = reflection_result.query
                 products = await rag_service.get_products(query=search_query, limit=1)
@@ -121,7 +111,6 @@ async def send_message(request: ChatRequest = Body(...)):
                 product = await rag_service.get_product_by_id(product_id)
                 
                 if not product:
-                    # Thử crawl nếu không tìm thấy trong RAG
                     logger.info("Product not found in RAG, trying crawl")
                     product = await reflection_service.crawl_product_detail(product_id)
                 
@@ -134,14 +123,12 @@ async def send_message(request: ChatRequest = Body(...)):
                 logger.warning("Could not identify a product from the request")
             
         elif reflection_result.action == "product_comparison":
-            # So sánh sản phẩm
             logger.info("Action: product_comparison")
             product_ids = reflection_result.additional_info.get("product_ids", [])
             product_names = reflection_result.additional_info.get("product_names", [])
             
             products = []
             
-            # Lấy sản phẩm theo ID (nếu có)
             if product_ids:
                 logger.info("Retrieving products by IDs: {}", product_ids)
                 for pid in product_ids:
@@ -153,30 +140,25 @@ async def send_message(request: ChatRequest = Body(...)):
                         logger.error("Error retrieving product {}: {}", pid, e)
                         continue
             
-            # Tìm sản phẩm theo tên (nếu không có ID)
             if product_names and len(products) < 2:
                 logger.info("Retrieving products by names: {}", product_names)
                 for name in product_names:
                     found_products = await rag_service.get_products(query=name, limit=1)
                     if found_products:
-                        # Kiểm tra trùng lặp
                         existing_ids = [p.get("id") for p in products]
                         if found_products[0].get("id") not in existing_ids:
                             products.append(found_products[0])
             
-            # Tìm kiếm sản phẩm dựa trên tổng quát nếu chưa đủ
             if len(products) < 2 and reflection_result.query:
                 logger.info("Not enough products found, searching by general query: {}", reflection_result.query)
                 found_products = await rag_service.get_products(query=reflection_result.query, limit=5)
                 
-                # Thêm vào danh sách sản phẩm không trùng lặp
                 existing_ids = [p.get("id") for p in products]
                 for product in found_products:
                     if product.get("id") not in existing_ids:
                         products.append(product)
                         existing_ids.append(product.get("id"))
                         
-                        # Dừng khi đủ 2-3 sản phẩm để so sánh
                         if len(products) >= 3:
                             break
             
@@ -189,9 +171,7 @@ async def send_message(request: ChatRequest = Body(...)):
     
     except Exception as e:
         logger.error("Error processing reflection action: {}", e)
-        # Tiếp tục xử lý để trả lời thông thường
     
-    # Tạo phản hồi sử dụng Gemini
     logger.info("Generating assistant response using Gemini")
     assistant_response = await chat_service.generate_response(
         user_message=request.message,
@@ -200,7 +180,6 @@ async def send_message(request: ChatRequest = Body(...)):
         data=response_data
     )
     
-    # Lưu phản hồi vào lịch sử chat
     assistant_message = ChatMessage(
         role=MessageRole.ASSISTANT,
         content=assistant_response,
@@ -213,7 +192,6 @@ async def send_message(request: ChatRequest = Body(...)):
     
     logger.info("Sending chat response with message type: {}", message_type)
     
-    # Trả về phản hồi
     return ChatResponse(
         session_id=session_id,
         response=assistant_message,
