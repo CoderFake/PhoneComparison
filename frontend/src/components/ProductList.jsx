@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { useInView } from 'react-intersection-observer';
 import { productApi } from '../services/api.jsx';
 
-const ProductList = () => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+// Added isFromChat and initialProducts props
+const ProductList = ({ isFromChat = false, initialProducts = null }) => {
+  const [products, setProducts] = useState(initialProducts || []);
+  const [loading, setLoading] = useState(!initialProducts);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('price');
   const [sortOrder, setSortOrder] = useState('asc');
@@ -14,14 +15,20 @@ const ProductList = () => {
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [error, setError] = useState(null);
   
-  // Intersection observer for animation
   const { ref, inView } = useInView({
     triggerOnce: false,
     threshold: 0.1,
   });
 
   useEffect(() => {
-    // Fetch products from API
+    // If products are provided from chat, use those
+    if (initialProducts) {
+      setProducts(initialProducts);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise fetch from API as usual
     const fetchProducts = async () => {
       setLoading(true);
       setError(null);
@@ -50,43 +57,19 @@ const ProductList = () => {
     };
 
     fetchProducts();
-  }, [searchTerm, sortBy, priceMin, priceMax, selectedBrands]);
+  }, [initialProducts, searchTerm, sortBy, priceMin, priceMax, selectedBrands]);
 
-  // Sort products
-  const sortedProducts = [...products].sort((a, b) => {
-    if (sortBy === 'price') {
-      return sortOrder === 'asc' ? a.min_price - b.min_price : b.min_price - a.min_price;
-    } else if (sortBy === 'name') {
-      return sortOrder === 'asc' 
-        ? a.name.localeCompare(b.name) 
-        : b.name.localeCompare(a.name);
-    } else if (sortBy === 'rating') {
-      // Assuming products have a rating property
-      const aRating = a.sources.length > 0 ? a.sources.reduce((sum, source) => sum + (source.rating || 0), 0) / a.sources.length : 0;
-      const bRating = b.sources.length > 0 ? b.sources.reduce((sum, source) => sum + (source.rating || 0), 0) / b.sources.length : 0;
-      return sortOrder === 'asc' ? aRating - bRating : bRating - aRating;
-    }
-    return 0;
-  });
-
-  const toggleSortOrder = () => {
-    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    // The search is already handled by the useEffect dependency
-  };
-
-  return (
-    <div className="fade-in">
+  // Only show search/filter when not coming from chat
+  const renderSearchFilters = () => {
+    if (isFromChat) return null;
+    
+    return (
       <div className="glass p-6 mb-8">
         <h1 className="text-3xl font-bold mb-2">So sánh giá điện thoại</h1>
         <p className="text-gray-600 dark:text-gray-300">
           Tìm kiếm và so sánh giá điện thoại từ nhiều nhà bán lẻ khác nhau
         </p>
         
-        {/* Search and filter */}
         <form onSubmit={handleSearch} className="mt-6">
           <div className="flex flex-col md:flex-row gap-4 mb-4">
             <div className="flex-1">
@@ -162,15 +145,57 @@ const ProductList = () => {
           </div>
         </form>
       </div>
+    );
+  };
 
-      {/* Error message */}
+  const sortedProducts = [...products].sort((a, b) => {
+    if (sortBy === 'price') {
+      return sortOrder === 'asc' ? a.min_price - b.min_price : b.min_price - a.min_price;
+    } else if (sortBy === 'name') {
+      return sortOrder === 'asc' 
+        ? a.name.localeCompare(b.name) 
+        : b.name.localeCompare(a.name);
+    } else if (sortBy === 'rating') {
+      const aRating = a.sources.length > 0 ? a.sources.reduce((sum, source) => sum + (source.rating || 0), 0) / a.sources.length : 0;
+      const bRating = b.sources.length > 0 ? b.sources.reduce((sum, source) => sum + (source.rating || 0), 0) / b.sources.length : 0;
+      return sortOrder === 'asc' ? aRating - bRating : bRating - aRating;
+    }
+    return 0;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+  };
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+  };
+
+  // For chat integration, add a header
+  const renderChatHeader = () => {
+    if (!isFromChat) return null;
+    
+    return (
+      <div className="glass p-6 mb-8">
+        <h1 className="text-3xl font-bold mb-2">Kết quả tìm kiếm</h1>
+        <p className="text-gray-600 dark:text-gray-300">
+          Đây là các sản phẩm phù hợp với yêu cầu của bạn
+        </p>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fade-in">
+      {renderSearchFilters()}
+      {renderChatHeader()}
+
       {error && (
         <div className="glass p-4 mb-8 bg-red-50 dark:bg-red-900 dark:bg-opacity-20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200">
           <p>{error}</p>
         </div>
       )}
 
-      {/* Product grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, index) => (
@@ -204,7 +229,6 @@ const ProductList = () => {
               <div className="flex items-center mb-2">
                 <div className="flex text-yellow-400">
                   {[...Array(5)].map((_, i) => {
-                    // Calculate average rating from sources
                     const avgRating = product.sources.length > 0 
                       ? product.sources.reduce((sum, source) => sum + (source.rating || 0), 0) / product.sources.length 
                       : 0;
@@ -229,8 +253,8 @@ const ProductList = () => {
                 {product.specifications?.display && (
                   <p>• {product.specifications.display}</p>
                 )}
-                {product.specifications?.processor && (
-                  <p>• {product.specifications.processor}</p>
+                {product.specifications?.cpu && (
+                  <p>• {product.specifications.cpu}</p>
                 )}
                 {product.specifications?.camera && (
                   <p>• {product.specifications.camera}</p>
@@ -261,7 +285,6 @@ const ProductList = () => {
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && sortedProducts.length === 0 && !error && (
         <div className="glass p-12 text-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

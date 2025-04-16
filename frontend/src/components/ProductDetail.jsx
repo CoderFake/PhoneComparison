@@ -3,24 +3,29 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useInView } from 'react-intersection-observer';
 import { productApi } from '../services/api.jsx';
 
-const ProductDetail = () => {
+const ProductDetail = ({ isFromChat = false, productData = null }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [product, setProduct] = useState(productData);
+  const [loading, setLoading] = useState(!productData);
   const [error, setError] = useState(null);
   const [activeImage, setActiveImage] = useState(0);
   const [activeTab, setActiveTab] = useState('specs');
   
-  // Animation refs
   const { ref: headerRef, inView: headerInView } = useInView({ triggerOnce: true });
   const { ref: imageRef, inView: imageInView } = useInView({ triggerOnce: true });
   const { ref: specsRef, inView: specsInView } = useInView({ triggerOnce: true });
   const { ref: pricesRef, inView: pricesInView } = useInView({ triggerOnce: true });
-  const { ref: reviewsRef, inView: reviewsInView } = useInView({ triggerOnce: true });
 
   useEffect(() => {
-    // Fetch product details from API
+    // If product data is provided from chat, use it
+    if (productData) {
+      setProduct(productData);
+      setLoading(false);
+      return;
+    }
+
+    // Otherwise fetch from API
     const fetchProduct = async () => {
       setLoading(true);
       setError(null);
@@ -36,11 +41,42 @@ const ProductDetail = () => {
       }
     };
 
-    fetchProduct();
-  }, [id]);
+    if (id) {
+      fetchProduct();
+    } else if (!isFromChat) {
+      setError('ID sản phẩm không hợp lệ');
+    }
+  }, [id, productData, isFromChat]);
 
   const handleCompare = () => {
-    navigate('/compare', { state: { productIds: [id] } });
+    navigate('/compare', { state: { productIds: [product.id] } });
+  };
+
+  // Only show breadcrumb when not coming from chat
+  const renderBreadcrumb = () => {
+    if (isFromChat) return null;
+    
+    return (
+      <div className="mb-6">
+        <nav className="flex" aria-label="Breadcrumb">
+          <ol className="inline-flex items-center space-x-1 md:space-x-3">
+            <li className="inline-flex items-center">
+              <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary-500 dark:hover:text-primary-400">
+                Trang chủ
+              </Link>
+            </li>
+            <li>
+              <div className="flex items-center">
+                <svg className="w-3 h-3 text-gray-400 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
+                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/>
+                </svg>
+                <span className="text-gray-500 dark:text-gray-400 ml-1 md:ml-2">{product?.name}</span>
+              </div>
+            </li>
+          </ol>
+        </nav>
+      </div>
+    );
   };
 
   if (loading) {
@@ -104,26 +140,7 @@ const ProductDetail = () => {
 
   return (
     <div className="fade-in">
-      {/* Breadcrumb */}
-      <div className="mb-6">
-        <nav className="flex" aria-label="Breadcrumb">
-          <ol className="inline-flex items-center space-x-1 md:space-x-3">
-            <li className="inline-flex items-center">
-              <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-primary-500 dark:hover:text-primary-400">
-                Trang chủ
-              </Link>
-            </li>
-            <li>
-              <div className="flex items-center">
-                <svg className="w-3 h-3 text-gray-400 mx-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 6 10">
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 9 4-4-4-4"/>
-                </svg>
-                <span className="text-gray-500 dark:text-gray-400 ml-1 md:ml-2">{product.name}</span>
-              </div>
-            </li>
-          </ol>
-        </nav>
-      </div>
+      {renderBreadcrumb()}
 
       {/* Header */}
       <div ref={headerRef} className={`glass p-6 mb-8 ${headerInView ? 'fade-in' : 'opacity-0'}`}>
@@ -244,12 +261,12 @@ const ProductDetail = () => {
                   {product.specifications.display}
                 </li>
               )}
-              {product.specifications?.processor && (
+              {product.specifications?.cpu && (
                 <li className="flex items-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  {product.specifications.processor}
+                  {product.specifications.cpu}
                 </li>
               )}
               {product.specifications?.camera && (
@@ -313,7 +330,7 @@ const ProductDetail = () => {
                 <p className="mb-4">{product.specifications?.display || 'Không có thông tin'}</p>
                 
                 <h3 className="text-lg font-semibold mb-4">Hiệu năng</h3>
-                <p className="mb-4">{product.specifications?.processor || 'Không có thông tin'}</p>
+                <p className="mb-4">{product.specifications?.cpu || 'Không có thông tin'}</p>
                 
                 <h3 className="text-lg font-semibold mb-4">Camera</h3>
                 <p className="mb-4">{product.specifications?.camera || 'Không có thông tin'}</p>

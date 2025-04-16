@@ -3,17 +3,16 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useInView } from 'react-intersection-observer';
 import { productApi } from '../services/api';
 
-const ProductComparison = () => {
+const ProductComparison = ({ isFromChat = false, productsData = null }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState(productsData || []);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [availableProducts, setAvailableProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!productsData);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
   
-  // Intersection observer for animation
   const { ref, inView } = useInView({
     triggerOnce: false,
     threshold: 0.1,
@@ -21,13 +20,25 @@ const ProductComparison = () => {
 
   // Initialize with products from location state if available
   useEffect(() => {
+    // If we have products from chat, use those directly
+    if (productsData) {
+      setProducts(productsData);
+      setLoading(false);
+      return;
+    }
+    
+    // Otherwise check for product IDs from location state
     if (location.state && location.state.productIds) {
       setSelectedProducts(location.state.productIds);
     }
-  }, [location]);
+  }, [location, productsData]);
 
   // Fetch selected products for comparison
   useEffect(() => {
+    // Skip if we already have products from chat
+    if (productsData) return;
+    
+    // Fetch based on IDs from navigation
     const fetchSelectedProducts = async () => {
       if (selectedProducts.length === 0) return;
       
@@ -47,10 +58,13 @@ const ProductComparison = () => {
     };
 
     fetchSelectedProducts();
-  }, [selectedProducts]);
+  }, [selectedProducts, productsData]);
 
   // Fetch available products for selection
   useEffect(() => {
+    // Skip when coming from chat
+    if (isFromChat) return;
+    
     const fetchAvailableProducts = async () => {
       try {
         const params = {
@@ -67,7 +81,7 @@ const ProductComparison = () => {
     };
 
     fetchAvailableProducts();
-  }, [searchTerm]);
+  }, [searchTerm, isFromChat]);
 
   // Toggle product selection
   const toggleProductSelection = (productId) => {
@@ -157,42 +171,11 @@ const ProductComparison = () => {
     // Search is handled by the useEffect dependency
   };
 
-  if (loading && selectedProducts.length > 0) {
+  // Render product selection UI only when not coming from chat
+  const renderProductSelection = () => {
+    if (isFromChat) return null;
+    
     return (
-      <div className="fade-in">
-        <div className="glass p-6 mb-8">
-          <div className="skeleton h-8 w-1/2 mb-4"></div>
-          <div className="skeleton h-4 w-3/4"></div>
-        </div>
-        <div className="glass p-6 mb-8">
-          <div className="skeleton h-10 w-full mb-6"></div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="skeleton h-40 w-full"></div>
-            <div className="skeleton h-40 w-full"></div>
-            <div className="skeleton h-40 w-full"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fade-in">
-      <div className="glass p-6 mb-8">
-        <h1 className="text-3xl font-bold mb-2">So sánh điện thoại</h1>
-        <p className="text-gray-600 dark:text-gray-300">
-          Chọn tối đa 3 điện thoại để so sánh thông số kỹ thuật
-        </p>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <div className="glass p-4 mb-8 bg-red-50 dark:bg-red-900 dark:bg-opacity-20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {/* Product selection */}
       <div className="glass p-6 mb-8">
         <div className="mb-6">
           <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -243,6 +226,62 @@ const ProductComparison = () => {
           ))}
         </div>
       </div>
+    );
+  };
+
+  // Render header
+  const renderHeader = () => {
+    if (isFromChat) {
+      return (
+        <div className="glass p-6 mb-8">
+          <h1 className="text-3xl font-bold mb-2">So sánh chi tiết</h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            So sánh các thông số kỹ thuật của các sản phẩm
+          </p>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="glass p-6 mb-8">
+        <h1 className="text-3xl font-bold mb-2">So sánh điện thoại</h1>
+        <p className="text-gray-600 dark:text-gray-300">
+          Chọn tối đa 3 điện thoại để so sánh thông số kỹ thuật
+        </p>
+      </div>
+    );
+  };
+
+  if (loading && selectedProducts.length > 0) {
+    return (
+      <div className="fade-in">
+        <div className="glass p-6 mb-8">
+          <div className="skeleton h-8 w-1/2 mb-4"></div>
+          <div className="skeleton h-4 w-3/4"></div>
+        </div>
+        <div className="glass p-6 mb-8">
+          <div className="skeleton h-10 w-full mb-6"></div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="skeleton h-40 w-full"></div>
+            <div className="skeleton h-40 w-full"></div>
+            <div className="skeleton h-40 w-full"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in">
+      {renderHeader()}
+
+      {error && (
+        <div className="glass p-4 mb-8 bg-red-50 dark:bg-red-900 dark:bg-opacity-20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {renderProductSelection()}
 
       {/* Comparison table */}
       {products.length > 0 ? (
@@ -304,7 +343,7 @@ const ProductComparison = () => {
                 <td className="px-4 py-3 font-medium bg-gray-50 dark:bg-gray-800">Vi xử lý</td>
                 {products.map(product => (
                   <td key={product.id} className="px-4 py-3 text-center">
-                    {product.specifications?.processor || 'N/A'}
+                    {product.specifications?.cpu || 'N/A'}
                   </td>
                 ))}
               </tr>
