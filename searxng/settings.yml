@@ -1,0 +1,119 @@
+server:
+  secret_key: "abcdefgh"
+  base_url: http://localhost:8080/
+  limiter: false
+  image_proxy: false
+  default_locale: vi
+  method: GET
+
+search:
+  safe_search: 0
+  autocomplete: 'google'
+  language: 'vi'
+  query_in_title: true
+  formats:
+    - html
+    - json
+  default_format: html
+
+ui:
+  default_theme: simple
+  theme_args:
+    simple_style: auto
+  static_use_hash: true
+  query_in_title: true
+  center_alignment: true
+  results_on_new_tab: false
+  infinite_scroll: true
+
+engines:
+  - name: google
+    engine: google
+    shortcut: go
+    use_mobile_ui: false
+    disabled: false
+    custom:
+      country: VN
+  
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: false
+    custom:
+      country: VN
+      language: vi-VN
+  
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+    custom:
+      region: vn-vi
+  
+  - name: tiki
+    engine: xpath
+    search_url: https://tiki.vn/search?q={query}
+    results_xpath: //div[contains(@class, "product-item")]
+    title_xpath: .//h3
+    url_xpath: .//a/@href
+    content_xpath: .//span[contains(@class, "price")]
+    thumbnail_xpath: .//img/@src
+    disabled: false
+  
+  - name: shopee
+    engine: xpath
+    search_url: https://shopee.vn/search?keyword={query}
+    results_xpath: //div[contains(@class, "shopee-search-item-result__item")]
+    title_xpath: .//div[contains(@class, "shopee-item-card__text-name")]
+    url_xpath: .//a/@href
+    content_xpath: .//div[contains(@class, "shopee-item-card__current-price")]
+    thumbnail_xpath: .//img/@src
+    disabled: false
+  
+  - name: thegioididong
+    engine: xpath
+    search_url: https://www.thegioididong.com/tim-kiem?key={query}
+    results_xpath: //li[contains(@class, "item")]
+    title_xpath: .//h3
+    url_xpath: .//a/@href
+    content_xpath: .//strong[contains(@class, "price")]
+    thumbnail_xpath: .//img/@src
+    disabled: false
+  
+  - name: fptshop
+    engine: xpath
+    search_url: https://fptshop.com.vn/tim-kiem/{query}
+    results_xpath: //div[contains(@class, "product-grid")]
+    title_xpath: .//h3
+    url_xpath: .//a/@href
+    content_xpath: .//div[contains(@class, "price")]
+    thumbnail_xpath: .//img/@src
+    disabled: false
+
+# Giới hạn kết quả tìm kiếm cho Việt Nam
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0
+  useragent_suffix: "SearXNG_VN"
+  pool_connections: 100
+  pool_maxsize: 100
+  retries: 2
+  proxies:
+    http: 
+    https:
+
+# Giới hạn chỉ tìm kiếm trong Việt Nam
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  public_instance: false
+  private: []
+  image_proxy: false
+  http_protocol_version: "1.0"
+  method: "GET"
+  default_http_headers:
+    X-Content-Type-Options: nosniff
+    X-XSS-Protection: 1; mode=block
+    X-Download-Options: noopen
+    X-Robots-Tag: noindex, nofollow
+    Referrer-Policy: no-referrer

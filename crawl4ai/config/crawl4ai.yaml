@@ -1,0 +1,119 @@
+server:
+  host: 0.0.0.0
+  port: 8888
+  debug: false
+  workers: 4
+  log_level: info
+
+crawler:
+  timeout: 30
+  retry: 3
+  user_agent: "Crawl4AI Bot - PhonePriceComparison"
+  respect_robots_txt: true
+  rate_limit:
+    enabled: true
+    requests_per_second: 2
+  proxy:
+    enabled: false
+    url: ""
+
+storage:
+  type: file
+  data_dir: /app/data
+  cache_ttl: 86400
+
+extraction:
+  # Cấu hình mặc định cho trang thông tin chi tiết điện thoại
+  phone_product:
+    selectors:
+      product_name: "h1.product-title, h1.product-name, div.product-name h1"
+      product_price: "span.price, div.product-price, p.price"
+      product_image: "div.product-gallery img, img.product-image, div.carousel img"
+      product_description: "div.product-description, div.product-content, div.description-content"
+      product_specifications: "table.specifications, div.specifications-content, ul.specifications"
+      product_brand: "span.brand, div.brand, a.brand"
+      
+  # Cấu hình mặc định cho trang danh sách sản phẩm
+  phone_list:
+    selectors:
+      product_item: "div.product-item, div.product-card, li.product"
+      product_name: "h3.product-name, h2.product-title, div.product-info h3"
+      product_price: "span.price, div.product-price, p.price"
+      product_image: "img.product-image, div.product-img img"
+      product_link: "a.product-link, div.product-img a, h3.product-name a"
+
+# Cấu hình đặc biệt cho từng trang web
+site_specific:
+  # Thegioididong.com
+  thegioididong.com:
+    phone_product:
+      selectors:
+        product_name: "h1"
+        product_price: "div.box-price p"
+        product_image: "div.owl-carousel img"
+        product_description: "div.article-content"
+        product_specifications: "div.parameter"
+    phone_list:
+      selectors:
+        product_item: "li.item"
+        product_name: "h3"
+        product_price: "strong.price"
+        product_image: "img.thumb"
+        product_link: "a"
+  
+  # FPTShop
+  fptshop.com.vn:
+    phone_product:
+      selectors:
+        product_name: "h1.st-name"
+        product_price: "div.st-price"
+        product_image: "div.st-slider img"
+        product_description: "div.st-specification"
+        product_specifications: "div.st-param"
+    phone_list:
+      selectors:
+        product_item: "div.cdt-product"
+        product_name: "h3"
+        product_price: "div.progress"
+        product_image: "img"
+        product_link: "a"
+  
+  # CellphoneS
+  cellphones.com.vn:
+    phone_product:
+      selectors:
+        product_name: "h1.product-name"
+        product_price: "p.product-price--current"
+        product_image: "div.product-image img"
+        product_description: "div.product-description"
+        product_specifications: "div.product-technical-content"
+    phone_list:
+      selectors:
+        product_item: "div.product-item"
+        product_name: "h3.product-name"
+        product_price: "p.special-price"
+        product_image: "img.product-img"
+        product_link: "a.product-name"
+
+# Cấu hình lưu trữ dữ liệu trích xuất
+output:
+  format: json
+  schema: 
+    - name: product_name
+      type: string
+    - name: product_price
+      type: string
+    - name: product_image
+      type: string
+    - name: product_description
+      type: string
+    - name: product_specifications
+      type: object
+    - name: product_brand
+      type: string
+    - name: source_url
+      type: string
+    - name: source_name
+      type: string
+    - name: crawl_time
+      type: datetime
