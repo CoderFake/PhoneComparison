@@ -10,8 +10,7 @@ import google.generativeai as genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 from loguru import logger
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders.html import HTMLLoader
-from langchain.document_loaders.base import Document
+from langchain_core.documents import Document
 from app.config import settings
 from app.models.chat import ChatMessage, ReflectionResult
 from app.models.product import Product, ProductListRequest, ProductSource, ProductSpecification
@@ -440,27 +439,31 @@ class ReflectionService:
     
     async def _process_html_with_structure_loader(self, html_content: str, url: str) -> List[Document]:
         """
-        Sử dụng HTMLStructureLoader để xử lý HTML và tạo documents.
+        Sử dụng BeautifulSoup để xử lý HTML và tạo documents.
         """
-        logger.info("Processing HTML with HTMLStructureLoader for URL: {}", url)
+        logger.info("Processing HTML with BeautifulSoup for URL: {}", url)
         
         try:
-            loader = HTMLLoader(html_content=html_content, open_encoding="utf-8")
-            documents = loader.load()
+            soup = BeautifulSoup(html_content, 'html.parser')
             
-            for doc in documents:
-                doc.metadata.update({
+            text = soup.get_text(separator=" ", strip=True)
+
+            document = Document(
+                page_content=text,
+                metadata={
                     "source": url,
                     "date": datetime.now().isoformat(),
                     "domain": extract_domain(url)
-                })
-            
-            texts = self.text_splitter.split_documents(documents)
+                }
+            )
+
+            texts = self.text_splitter.split_documents([document])
             
             logger.info("Created {} document chunks from HTML", len(texts))
             return texts
+    
         except Exception as e:
-            logger.error("Error processing HTML with HTMLStructureLoader: {}", e)
+            logger.error("Error processing HTML with BeautifulSoup: {}", e)
             return []
     
     async def _extract_products_from_html(self, html_content: str, url: str) -> List[Dict[str, Any]]:

@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import Dict, Any, List, Optional
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 from functools import lru_cache
 

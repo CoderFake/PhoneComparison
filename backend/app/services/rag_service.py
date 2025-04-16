@@ -10,7 +10,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
 from qdrant_client.http.exceptions import UnexpectedResponse
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders.base import Document
+from langchain_core.documents import Document
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_exponential
 
