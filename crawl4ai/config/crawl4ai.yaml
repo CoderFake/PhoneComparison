@@ -14,8 +14,8 @@ crawler:
     enabled: true
     requests_per_second: 2
   proxy:
-    enabled: false
-    url: ""
+    enabled: true
+    url: "http://pubproxy.com/api/proxy?limit=1&format=txt&http=true&country=VN&type=http"
 
 storage:
   type: file

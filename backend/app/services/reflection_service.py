@@ -254,20 +254,26 @@ class ReflectionService:
                     logger.warning("No HTML content from URL: {}", url)
                     continue
                 
-                documents = await self._process_html_with_structure_loader(html_content, url)
+                document = Document(
+                    page_content=html_content,
+                    metadata={
+                        "source": url,
+                        "date": datetime.now().isoformat(),
+                        "domain": extract_domain(url),
+                        "query": request.query
+                    }
+                )
                 
-                if not documents:
-                    logger.warning("No documents extracted from HTML for URL: {}", url)
-                    continue
+                chunks = self.text_splitter.split_documents([document])
                 
-                products_from_url = await self._extract_products_from_html(html_content, url)
+                products_from_url = await self._extract_products_with_llm(html_content, url, request.query)
                 
-                for doc in documents:
-                    doc.metadata["product_data"] = products_from_url
-                
-                await rag_service.add_documents_to_rag(documents)
-                
-                product_jsons.extend(products_from_url if isinstance(products_from_url, list) else [products_from_url])
+                if products_from_url:
+                    for chunk in chunks:
+                        chunk.metadata["product_data"] = products_from_url
+                    
+                    await rag_service.add_documents_to_rag(chunks)
+                    product_jsons.extend(products_from_url)
                 
             except Exception as e:
                 logger.error("Error processing URL {}: {}", url, e)
@@ -281,9 +287,157 @@ class ReflectionService:
         end_idx = start_idx + limit
         
         logger.info("Returning {} products from {} crawled", 
-                  min(len(sorted_products), limit), len(product_jsons))
+                min(len(sorted_products), limit), len(product_jsons))
         
         return sorted_products[start_idx:end_idx]
+
+    async def _extract_products_with_llm(self, html_content: str, url: str, query: str) -> List[Dict[str, Any]]:
+        """
+        Sử dụng LLM để trích xuất thông tin sản phẩm từ HTML.
+        """
+        logger.info("Extracting products from HTML using LLM for URL: {}", url)
+        
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            for tag in soup(['script', 'style', 'header', 'footer', 'nav']):
+                tag.decompose()
+            
+            text_content = soup.get_text(separator=' ', strip=True)
+            
+            text_content = text_content[:10000] 
+            
+            prompt = f"""
+            Dưới đây là nội dung HTML từ một trang web thương mại điện tử về điện thoại. 
+            Hãy trích xuất thông tin về các sản phẩm điện thoại từ nội dung này.
+            
+            URL: {url}
+            Query tìm kiếm: {query}
+            
+            Nội dung:
+            {text_content}
+            
+            Hãy trích xuất thông tin các sản phẩm điện thoại và trả về dưới dạng JSON theo schema:
+            ```json
+            [
+            {{
+                "id": "UUID_ngẫu_nhiên",
+                "name": "Tên sản phẩm",
+                "brand": "Thương hiệu",
+                "model": "Model",
+                "min_price": giá_thấp_nhất (số, không có dấu phẩy),
+                "max_price": giá_cao_nhất (số, không có dấu phẩy),
+                "average_price": giá_trung_bình (số, không có dấu phẩy),
+                "image_url": ["url_hình_ảnh"],
+                "specifications": {{
+                "cpu": "Thông tin CPU nếu có",
+                "ram": "Thông tin RAM nếu có",
+                "storage": "Bộ nhớ trong nếu có",
+                "display": "Thông tin màn hình nếu có",
+                "camera": "Thông tin camera nếu có",
+                "battery": "Thông tin pin nếu có",
+                "os": "Hệ điều hành nếu có"
+                }},
+                "sources": [
+                {{
+                    "name": "Tên trang web",
+                    "url": "URL trang sản phẩm",
+                    "price": giá (số, không có dấu phẩy),
+                    "price_currency": "VND",
+                    "last_updated": "ISO datetime hiện tại",
+                    "in_stock": true
+                }}
+                ]
+            }}
+            ]
+            ```
+            
+            Chỉ trả về đúng JSON theo schema, không có nội dung khác. Chỉ trích xuất các sản phẩm điện thoại thực sự, không tạo thông tin giả.
+            """
+            
+            response = await self.model.generate_content_async(prompt)
+            
+            json_pattern = r'\[\s*\{.*\}\s*\]'
+            json_matches = re.search(json_pattern, response.text, re.DOTALL)
+            
+            if not json_matches:
+                json_pattern = r'\{.*\}'
+                json_matches = re.search(json_pattern, response.text, re.DOTALL)
+            
+            if json_matches:
+                json_str = json_matches.group(0)
+                products = json.loads(json_str)
+                
+                if isinstance(products, dict):
+                    products = [products]
+                    
+                logger.info("Extracted {} products with LLM from URL: {}", len(products), url)
+                
+                normalized_products = []
+                for product in products:
+                    if "id" not in product or not product["id"]:
+                        product["id"] = str(uuid.uuid4())
+                    
+                    if "brand" in product and product["brand"]:
+                        product["brand"] = normalize_brand_name(product["brand"])
+                    
+                    for price_field in ["min_price", "max_price", "average_price"]:
+                        if price_field in product:
+                            if isinstance(product[price_field], str):
+                                product[price_field] = float(re.sub(r'[^\d.]', '', product[price_field]) or 0)
+                            elif product[price_field] is None:
+                                product[price_field] = 0.0
+                    
+                    if "specifications" not in product or not product["specifications"]:
+                        product["specifications"] = {
+                            "cpu": None,
+                            "ram": None,
+                            "storage": None,
+                            "display": None,
+                            "camera": None,
+                            "battery": None,
+                            "os": None,
+                            "connectivity": [],
+                            "color": [],
+                            "dimensions": None,
+                            "weight": None,
+                            "additional_specs": {}
+                        }
+                    
+                    # Đảm bảo sources có URL hợp lệ
+                    if "sources" in product and product["sources"]:
+                        for source in product["sources"]:
+                            if "url" in source and source["url"] and not source["url"].startswith(('http://', 'https://')):
+                                domain = extract_domain(url)
+                                source["url"] = f"https://{domain}{source['url'] if source['url'].startswith('/') else '/' + source['url']}"
+                            
+                            if "price" in source:
+                                if isinstance(source["price"], str):
+                                    source["price"] = float(re.sub(r'[^\d.]', '', source["price"]) or 0)
+                                elif source["price"] is None:
+                                    source["price"] = 0.0
+                            
+                            if "last_updated" not in source or not source["last_updated"]:
+                                source["last_updated"] = datetime.now().isoformat()
+                    
+                    if "image_url" not in product or not product["image_url"]:
+                        product["image_url"] = []
+                    elif isinstance(product["image_url"], str):
+                        product["image_url"] = [product["image_url"]]
+                    
+                    try:
+                        from app.models.product import Product as ProductModel
+                        validated_product = ProductModel(**product)
+                        normalized_products.append(product)
+                    except Exception as e:
+                        logger.error("Product validation error: {}", e)
+                
+                return normalized_products
+                
+            return []
+        except Exception as e:
+            logger.error("Error extracting products with LLM: {}", e)
+            return []
     
     async def crawl_product_detail(self, product_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -337,30 +491,38 @@ class ReflectionService:
         """
         logger.info("Searching URLs with SearXNG for: {}", query)
         
+        # Thêm từ khóa tìm kiếm chuyên biệt cho điện thoại
+        enhanced_query = f"{query} điện thoại site:thegioididong.com OR site:fptshop.com.vn OR site:cellphones.com.vn OR site:hoanghamobile.com"
+        
         search_url = f"{settings.SEARXNG_API_URL}/search"
         params = {
-            "q": query,
+            "q": enhanced_query,
             "format": "json",
             "language": settings.SEARCH_LANGUAGE,
             "region": settings.SEARCH_REGION,
             "category_general": 1,
             "time_range": "",
             "engines": ",".join(settings.SEARCH_ENGINES),
-            "limit": settings.SEARCH_LIMIT
+            "limit": settings.SEARCH_LIMIT * 2  # Tăng giới hạn để có nhiều kết quả hơn
         }
         
         try:
-            response = await self.client.get(search_url, params=params)
+            response = await self.client.get(search_url, params=params, timeout=20)
             response.raise_for_status()
             
             data = response.json()
             
             if not isinstance(data, dict) or "results" not in data:
                 logger.error("Invalid response format from SearXNG: {}", data)
-                return []
+                return self._get_fallback_urls(query)
+            
+            results = data.get("results", [])
+            if not results:
+                logger.warning("No results from SearXNG, using fallback URLs")
+                return self._get_fallback_urls(query)
             
             urls = []
-            for result in data.get("results", []):
+            for result in results:
                 if "url" in result:
                     url = result["url"]
                     domain = extract_domain(url)
@@ -369,12 +531,72 @@ class ReflectionService:
             
             unique_urls = list(dict.fromkeys(urls))[:settings.MAX_CRAWL_PAGES]
             
+            # Nếu không tìm thấy URL hợp lệ, sử dụng URL dự phòng
+            if not unique_urls:
+                logger.warning("No valid e-commerce URLs found, using fallback URLs")
+                return self._get_fallback_urls(query)
+            
             logger.info("Found {} unique URLs from SearXNG", len(unique_urls))
             return unique_urls
         except Exception as e:
             logger.error("Error searching URLs with SearXNG: {}", e)
-            return []
-    
+            return self._get_fallback_urls(query)
+
+    def _get_fallback_urls(self, query: str) -> List[str]:
+        """
+        Cung cấp URL dự phòng khi không thể tìm thấy URL từ SearXNG.
+        """
+        query_encoded = query.replace(" ", "+")
+        
+        # Check for brands in query
+        brands = {
+            "xiaomi": ["xiaomi", "redmi", "poco"],
+            "samsung": ["samsung", "galaxy"],
+            "apple": ["apple", "iphone"],
+            "oppo": ["oppo"],
+            "vivo": ["vivo"],
+            "realme": ["realme"],
+            "nokia": ["nokia"],
+            "huawei": ["huawei"],
+            "honor": ["honor"]
+        }
+        
+        detected_brand = None
+        for brand, keywords in brands.items():
+            if any(keyword in query.lower() for keyword in keywords):
+                detected_brand = brand
+                break
+        
+        fallback_urls = [
+            f"https://www.thegioididong.com/tim-kiem?q={query_encoded}",
+            f"https://fptshop.com.vn/tim-kiem/{query_encoded}",
+            f"https://cellphones.com.vn/catalogsearch/result/?q={query_encoded}",
+            f"https://hoanghamobile.com/tim-kiem?kwd={query_encoded}"
+        ]
+        
+        # Thêm URL danh mục nếu phát hiện thương hiệu
+        if detected_brand:
+            brand_urls = [
+                f"https://www.thegioididong.com/dtdd-{detected_brand}",
+                f"https://fptshop.com.vn/dien-thoai/{detected_brand}",
+                f"https://cellphones.com.vn/mobile/{detected_brand}.html",
+                f"https://hoanghamobile.com/dien-thoai-di-dong/{detected_brand}"
+            ]
+            fallback_urls = brand_urls + fallback_urls
+        
+        # Thêm URL danh mục chung nếu không có thương hiệu cụ thể
+        else:
+            category_urls = [
+                "https://www.thegioididong.com/dtdd",
+                "https://fptshop.com.vn/dien-thoai",
+                "https://cellphones.com.vn/mobile.html",
+                "https://hoanghamobile.com/dien-thoai-di-dong"
+            ]
+            fallback_urls.extend(category_urls)
+        
+        logger.info("Using {} fallback URLs", len(fallback_urls))
+        return fallback_urls[:settings.MAX_CRAWL_PAGES]
+        
     def _is_valid_ecommerce_domain(self, domain: str) -> bool:
         """
         Kiểm tra domain có phải là trang thương mại điện tử Việt Nam không.
@@ -392,45 +614,102 @@ class ReflectionService:
     
     async def _crawl_html(self, url: str) -> Optional[str]:
         """
-        Sử dụng Crawl4AI để crawl HTML từ URL.
+        Lấy HTML từ URL - sử dụng cả crawl4ai và httpx trực tiếp như fallback.
         """
         logger.info("Crawling HTML from URL: {}", url)
         
-        crawl_url = f"{settings.CRAWL4AI_API_URL}/crawl"
-        
+        # Phương pháp 1: Thử sử dụng crawl4ai trước
         try:
-            payload = {
-                "urls": [url],
-                "depth": 0,  # Chỉ crawl trang hiện tại
-                "respect_robots_txt": True,
-                "user_agent": settings.CRAWL_USER_AGENT,
-                "extract_html": True,  # Lấy toàn bộ HTML
-                "extract": {}  # Không cần extract fields
+            crawl_url = f"{settings.CRAWL4AI_API_URL}/crawl"
+            
+            # Tạo các user agent phổ biến
+            user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:113.0) Gecko/20100101 Firefox/113.0",
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+            ]
+            
+            # Chọn ngẫu nhiên một user agent
+            import random
+            user_agent = random.choice(user_agents)
+            
+            # Headers phổ biến
+            headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Cache-Control": "max-age=0",
+                "Connection": "keep-alive",
+                "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1"
             }
             
-            response = await self.client.post(crawl_url, json=payload)
-            response.raise_for_status()
+            payload = {
+                "urls": [url],
+                "depth": 0,
+                "respect_robots_txt": False,
+                "user_agent": user_agent,
+                "headers": headers,
+                "extract_html": True,
+                "extract": {},
+                "timeout": 30,
+                "retry": 3
+            }
             
-            data = response.json()
+            response = await self.client.post(crawl_url, json=payload, timeout=40)
             
-            if not isinstance(data, dict) or "results" not in data:
-                logger.error("Invalid response format from Crawl4AI: {}", data)
-                return None
-            
-            crawled_data = data.get("results", {})
-            if not crawled_data or url not in crawled_data:
-                logger.error("No data returned for URL: {}", url)
-                return None
+            if response.status_code == 200:
+                data = response.json()
                 
-            html_content = crawled_data[url].get("html", "")
-            
-            if not html_content:
-                logger.error("No HTML content returned for URL: {}", url)
-                return None
-                
-            return html_content
+                if isinstance(data, dict) and "results" in data:
+                    crawled_data = data.get("results", {})
+                    
+                    if crawled_data and url in crawled_data:
+                        html_content = crawled_data[url].get("html", "")
+                        
+                        if html_content:
+                            logger.info("Successfully got HTML from crawl4ai for URL: {}", url)
+                            return html_content
+        
+            logger.warning("Failed to get HTML with crawl4ai, trying direct httpx as fallback")
         except Exception as e:
-            logger.error("Error crawling HTML with Crawl4AI: {}", e)
+            logger.error("Error using crawl4ai: {}", e)
+            logger.warning("Trying direct httpx as fallback")
+        
+        # Phương pháp 2: Sử dụng httpx trực tiếp
+        try:
+            headers = {
+                "User-Agent": random.choice(user_agents),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Cache-Control": "max-age=0",
+                "Referer": "https://www.google.com/",
+                "Sec-Ch-Ua": '"Chromium";v="125", "Google Chrome";v="125"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "cross-site",
+                "Upgrade-Insecure-Requests": "1",
+                "Connection": "keep-alive"
+            }
+            
+            async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30.0) as client:
+                response = await client.get(url)
+                
+                if response.status_code == 200:
+                    logger.info("Successfully got HTML with direct httpx for URL: {}", url)
+                    return response.text
+                else:
+                    logger.warning("Failed to get HTML with direct httpx: status code {}", response.status_code)
+                    return None
+        except Exception as e:
+            logger.error("Error using direct httpx: {}", e)
             return None
     
     async def _process_html_with_structure_loader(self, html_content: str, url: str) -> List[Document]:
