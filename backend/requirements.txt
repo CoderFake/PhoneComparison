@@ -14,9 +14,9 @@ google-generativeai==0.8.4
 python-multipart==0.0.20
 jinja2==3.1.6
 joblib==1.4.2
-numpy==2.2.4
 aiofiles==24.1.0
 fastapi-cache2==0.2.1
 tenacity==9.0.0
 loguru==0.7.3
 pytest==8.3.5
+numpy==1.26.4

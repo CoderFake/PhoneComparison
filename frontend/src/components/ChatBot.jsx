@@ -17,6 +17,7 @@ const ChatBot = () => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+
   useEffect(() => {
     const newSessionId = localStorage.getItem('chatSessionId') || uuidv4();
     setSessionId(newSessionId);
@@ -28,7 +29,6 @@ const ChatBot = () => {
         if (history && history.messages && history.messages.length > 0) {
           setMessages(history.messages);
           
-          // Set initial view based on latest assistant message
           const latestAssistantMsg = [...history.messages]
             .reverse()
             .find(msg => msg.role === 'assistant');
@@ -38,7 +38,8 @@ const ChatBot = () => {
           }
         } else {
           setIsTyping(true);
-          const response = await chatService.sendMessage(newSessionId, "");
+          const welcomeMessage = "Xin chào, tôi có thể giúp gì cho bạn?";
+          const response = await chatService.sendMessage(newSessionId, welcomeMessage);
           if (response && response.response) {
             setMessages([response.response]);
           }
@@ -46,12 +47,7 @@ const ChatBot = () => {
         }
       } catch (error) {
         console.error('Error initializing chat:', error);
-        setIsTyping(true);
-        const response = await chatService.sendMessage(newSessionId, "");
-        if (response && response.response) {
-          setMessages([response.response]);
-        }
-        setIsTyping(false);
+        setMessages([]);
       }
     };
     
@@ -142,7 +138,7 @@ const ChatBot = () => {
   );
 
   const renderChatWidget = () => (
-    <div className="glass w-80 h-96 mb-4 flex flex-col rounded-xl overflow-hidden shadow-xl">
+    <div className="glass w-96 h-[32rem] mb-4 flex flex-col rounded-xl overflow-hidden shadow-xl">
       <div className="bg-gradient-blue-purple p-3 flex justify-between items-center">
         <h3 className="text-white font-semibold">Trợ lý mua sắm</h3>
         <button 

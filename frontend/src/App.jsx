@@ -32,9 +32,9 @@ const App = () => {
               Phone Price Comparison
             </Link>
             <nav className="hidden md:flex space-x-6">
-              <Link to="/" className="text-white hover:text-gray-200 transition-colors">Home</Link>
-              <Link to="/compare" className="text-white hover:text-gray-200 transition-colors">Compare</Link>
-              <Link to="/chat" className="text-white hover:text-gray-200 transition-colors">AI Assistant</Link>
+              <Link to="/" className="text-white hover:text-gray-200 transition-colors">Trang chủ</Link>
+              <Link to="/compare" className="text-white hover:text-gray-200 transition-colors">So sánh</Link>
+              <Link to="/chat" className="text-white hover:text-gray-200 transition-colors">Trợ lý AI</Link>
             </nav>
             <button 
               onClick={toggleDarkMode}
@@ -59,13 +59,13 @@ const App = () => {
         <div className="container-responsive py-2">
           <div className="flex justify-between space-x-4">
             <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-              Home
+              Trang chủ
             </Link>
             <Link to="/compare" className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-              Compare
+              So sánh
             </Link>
             <Link to="/chat" className="px-3 py-2 rounded-md text-sm font-medium text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
-              AI Assistant
+              Trợ lý AI
             </Link>
           </div>
         </div>
@@ -86,23 +86,23 @@ const App = () => {
         <div className="container-responsive">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h3 className="text-lg font-semibold mb-4">Phone Price Comparison</h3>
+              <h3 className="text-lg font-semibold mb-4">So sánh giá điện thoại</h3>
               <p className="text-sm opacity-80">
-                Compare prices and features of smartphones across different retailers to find the best deals.
+                So sánh giá và tính năng của điện thoại thông minh từ các nhà bán lẻ khác nhau để tìm ưu đãi tốt nhất.
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+              <h3 className="text-lg font-semibold mb-4">Liên kết nhanh</h3>
               <ul className="space-y-2 text-sm">
-                <li><Link to="/" className="opacity-80 hover:opacity-100 transition-opacity">Home</Link></li>
-                <li><Link to="/compare" className="opacity-80 hover:opacity-100 transition-opacity">Compare Phones</Link></li>
-                <li><Link to="/chat" className="opacity-80 hover:opacity-100 transition-opacity">AI Assistant</Link></li>
+                <li><Link to="/" className="opacity-80 hover:opacity-100 transition-opacity">Trang chủ</Link></li>
+                <li><Link to="/compare" className="opacity-80 hover:opacity-100 transition-opacity">So sánh điện thoại</Link></li>
+                <li><Link to="/chat" className="opacity-80 hover:opacity-100 transition-opacity">Trợ lý AI</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-lg font-semibold mb-4">Contact</h3>
+              <h3 className="text-lg font-semibold mb-4">Liên hệ</h3>
               <p className="text-sm opacity-80">
-                Have questions or feedback? Reach out to us.
+                Bạn có câu hỏi hoặc phản hồi? Liên hệ với chúng tôi.
               </p>
               <div className="mt-4 flex space-x-4">
                 <a href="#" className="text-white hover:text-gray-200 transition-colors">
@@ -120,7 +120,7 @@ const App = () => {
             </div>
           </div>
           <div className="mt-8 pt-4 border-t border-white border-opacity-20 text-center text-sm opacity-70">
-            <p>© {new Date().getFullYear()} Phone Price Comparison. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} So sánh giá điện thoại. Đã đăng ký bản quyền.</p>
           </div>
         </div>
       </footer>

@@ -204,22 +204,20 @@ async def get_chat_history(session_id: str):
     API lấy lịch sử chat.
     """
     if session_id not in chat_sessions:
-        logger.warning("Chat session not found: {}", session_id)
-        raise HTTPException(status_code=404, detail="Không tìm thấy phiên chat")
+        logger.info("Chat session not found: {}, creating new session", session_id)
+        chat_sessions[session_id] = ChatSession(
+            id=session_id,
+            messages=[
+                ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content="Xin chào! Tôi là trợ lý AI, tôi có thể giúp gì cho bạn về việc tìm kiếm và so sánh giá điện thoại?",
+                    type=MessageType.TEXT,
+                    timestamp=datetime.now()
+                )
+            ],
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
     
     logger.info("Retrieving chat history for session: {}", session_id)
     return chat_sessions[session_id]
-
-@router.delete("/history/{session_id}")
-async def delete_chat_session(session_id: str):
-    """
-    API xóa phiên chat.
-    """
-    if session_id not in chat_sessions:
-        logger.warning("Chat session not found for deletion: {}", session_id)
-        raise HTTPException(status_code=404, detail="Không tìm thấy phiên chat")
-    
-    logger.info("Deleting chat session: {}", session_id)
-    del chat_sessions[session_id]
-    
-    return {"message": "Phiên chat đã được xóa thành công"}

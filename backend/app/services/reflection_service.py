@@ -230,10 +230,6 @@ class ReflectionService:
         logger.info("Crawling new products for query: {}", request.query)
         
         search_terms = request.query
-        if request.price_min:
-            search_terms += f" giá từ {request.price_min}"
-        if request.price_max:
-            search_terms += f" giá đến {request.price_max}"
         if request.brands:
             search_terms += f" {' '.join(request.brands)}"
             
